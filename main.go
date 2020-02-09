@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path"
@@ -24,8 +24,7 @@ func (e Env) CloneOrPull() error {
 		}
 	}
 
-	git := path.Join(e.Dir, ".git")
-	if isDirExist(git) {
+	if isDirExist(path.Join(e.Dir, ".git")) {
 		return e.pull()
 	} else {
 		return e.clone()
@@ -35,7 +34,12 @@ func (e Env) CloneOrPull() error {
 func (e Env) clone() error {
 	fmt.Println("clone " + e.Name)
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("cd %s; git clone %s .", e.Dir, e.Source))
-	stderr, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
@@ -44,8 +48,8 @@ func (e Env) clone() error {
 		return err
 	}
 
-	slurp, _ := ioutil.ReadAll(stderr)
-	fmt.Printf("%s: %s\n", e.Name, slurp)
+	e.readAllAndPrint(stdout)
+	e.readAllAndPrint(stderr)
 
 	if err := cmd.Wait(); err != nil {
 		return err
@@ -57,7 +61,12 @@ func (e Env) pull() error {
 	fmt.Println("pull " + e.Name)
 
 	cmd := exec.Command("sh", "-c", fmt.Sprintf("cd %s; git pull", e.Dir))
-	stderr, err := cmd.StdoutPipe()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
@@ -66,15 +75,20 @@ func (e Env) pull() error {
 		return err
 	}
 
-	slurp, _ := ioutil.ReadAll(stderr)
-	if string(slurp) != "" {
-		fmt.Printf("%s: %s", e.Name, slurp)
-	}
+	e.readAllAndPrint(stdout)
+	e.readAllAndPrint(stderr)
 
 	if err := cmd.Wait(); err != nil {
 		return err
 	}
 	return nil
+}
+
+func (e Env) readAllAndPrint(reader io.Reader) {
+	slurp, _ := ioutil.ReadAll(reader)
+	if string(slurp) != "" {
+		fmt.Printf("%s: %s\n", e.Name, slurp)
+	}
 }
 
 func main() {
@@ -87,11 +101,12 @@ func main() {
 	envs := []Env{
 		Env{Dir: path.Join(homeDir, ".pyenv"), Name: "pyenv", Source: "https://github.com/pyenv/pyenv"},
 		Env{Dir: path.Join(homeDir, ".nodenv"), Name: "nodenv", Source: "https://github.com/nodenv/nodenv"},
+		Env{Dir: path.Join(homeDir, ".goenv"), Name: "goenv", Source: "https://github.com/syndbg/goenv"},
 	}
 
 	err = Run(envs)
 	if err != nil {
-		log.Fatalf("some errors: %s", err)
+		fmt.Printf("some errors: %s\n", err)
 	}
 
 	fmt.Println("finished.")
@@ -108,7 +123,7 @@ func Run(envList []Env) error {
 
 			if err := e.CloneOrPull(); err != nil {
 				e.Err = err
-				log.Printf("err: %s\n", err)
+				fmt.Printf("err: %s\n", err)
 			}
 		}(e)
 	}
