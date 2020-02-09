@@ -15,7 +15,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	homeDir = path.Join(homeDir, "playground")
+
+	// DEBUG
+	// homeDir = path.Join(homeDir, "playground")
 
 	EnvList = []Env{
 		Env{Dir: path.Join(homeDir, ".pyenv"), Name: "pyenv", Source: "https://github.com/pyenv/pyenv"},
